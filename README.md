@@ -15,6 +15,8 @@ translate the generated subtitles through DeepL or Baidu Translate.
 ## Documentation
 
 - [Detailed design (Chinese)](docs/design.md)
+- [Contributing](CONTRIBUTING.md)
+- [Agent and contributor guide](AGENTS.md)
 
 ## What is included
 

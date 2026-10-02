@@ -14,6 +14,8 @@
 ## 文档
 
 - [详细设计（中文）](docs/design.md)
+- [贡献指南](CONTRIBUTING.md)
+- [Agent 与贡献者指南](AGENTS.md)
 
 ## 包含内容
 
