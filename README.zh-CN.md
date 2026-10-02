@@ -2,7 +2,7 @@
 
 中文 | [English](README.md)
 
-这是一个适用于 macOS / Apple Silicon 的小型演示项目：从本地媒体文件生成 SRT 字幕文件。
+这是一个适用于 macOS / Apple Silicon 的脚本工具：从本地媒体文件生成 SRT 字幕文件。
 
 该流程使用 FFmpeg 提取单声道音频，通过
 [mlx-whisper](https://github.com/ml-explore/mlx-examples/tree/main/whisper)
