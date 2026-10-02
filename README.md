@@ -64,7 +64,9 @@ cd auto-subtitle
 # Install FFmpeg (via Homebrew), create .venv, install mlx-whisper,
 # then run doctor and the offline fixture test.
 scripts/setup-macos.sh
-source .venv/bin/activate
+
+# Run the included demo. The project uses .venv automatically.
+WHISPER_MODEL=tiny bin/autosub samples/sample.mov zh zh
 
 # Generate source-language subtitles only
 WHISPER_MODEL=tiny bin/autosub /path/to/video.mp4 en en

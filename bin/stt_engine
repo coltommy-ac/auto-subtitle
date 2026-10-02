@@ -1,5 +1,8 @@
 #!/bin/bash
 
+script_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+project_root=$(dirname "$script_dir")
+
 # stt_engine: 语音识别引擎
 # 使用 mlx-whisper（Apple Silicon 原生，GPU/Neural Engine 加速）
 # 输出 JSON 格式与 make-srt.py 兼容
@@ -39,6 +42,17 @@ fi
 # Whisper 模型（可通过环境变量覆盖，默认 large）
 WHISPER_MODEL=${WHISPER_MODEL:-large}
 
+# Setup installs mlx-whisper in the project virtual environment. Prefer that
+# executable so users do not need to activate .venv before running autosub.
+if [ -x "$project_root/.venv/bin/mlx_whisper" ]; then
+    mlx_whisper_cmd="$project_root/.venv/bin/mlx_whisper"
+elif command -v mlx_whisper >/dev/null 2>&1; then
+    mlx_whisper_cmd=$(command -v mlx_whisper)
+else
+    echo "mlx_whisper not found; run: scripts/setup-macos.sh"
+    exit 3
+fi
+
 # 临时输出目录和文件名
 tmp_dir=$(dirname "$text_file")
 base_name=$(basename "$audio_file" .flac)
@@ -51,7 +65,7 @@ echo "running mlx-whisper on $audio_file (model=$WHISPER_MODEL, lang=$lang)..."
 #   --language      指定原始语言，避免自动检测误差
 #   --output-format json  输出 JSON（注意 mlx-whisper 用连字符）
 #   --output-dir    输出目录
-mlx_whisper "$audio_file" \
+"$mlx_whisper_cmd" "$audio_file" \
     --model "mlx-community/whisper-${WHISPER_MODEL}-mlx" \
     --language "$lang" \
     --output-format json \

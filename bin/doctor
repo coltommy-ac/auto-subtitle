@@ -79,9 +79,9 @@ done
 if command -v mlx_whisper >/dev/null 2>&1; then
     pass "mlx_whisper found"
 elif [ -x "$project_root/.venv/bin/mlx_whisper" ]; then
-    fail "mlx_whisper is installed in .venv but it is not activated; run: source .venv/bin/activate"
+    pass "mlx_whisper found in the project .venv (used automatically)"
 else
-    fail "mlx_whisper not found; activate the project virtual environment, then run: python -m pip install mlx-whisper"
+    fail "mlx_whisper not found; run: scripts/setup-macos.sh"
 fi
 
 model="${WHISPER_MODEL:-large}"
