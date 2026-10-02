@@ -5,15 +5,15 @@
 set -euo pipefail
 
 repo_root=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
-media_file="$repo_root/samples/PMQ.flv"
+media_file="$repo_root/samples/sample.mov"
 
 usage() {
     cat <<'EOF'
 Usage: tests/test_smoke.sh [--media /absolute/or/relative/path]
 
 Runs FFmpeg, mlx-whisper's tiny model, and SRT generation against the first
-five seconds of authorized local media. The default is samples/PMQ.flv when it
-exists locally; no media is shipped or added to Git by this test.
+five seconds of authorized local media. The default is the included
+samples/sample.mov; no other media is added to Git by this test.
 EOF
 }
 

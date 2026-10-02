@@ -6,7 +6,7 @@ __pycache__/
 
 # User media, generated audio, transcripts, and subtitles
 samples/*
-!samples/PMQ.flv
+!samples/sample.mov
 cache/
 *.srt
 !tests/fixtures/expected.en.srt

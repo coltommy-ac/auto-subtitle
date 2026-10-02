@@ -17,11 +17,11 @@ translate the generated subtitles through DeepL or Baidu Translate.
 - `bin/stt_engine`: mlx-whisper adapter
 - `bin/make-srt.py`: timestamped JSON to SRT converter
 - `bin/translate.py`: optional DeepL/Baidu translation adapter
-- `samples/PMQ.flv`: a short demo video for the opt-in smoke test
+- `samples/sample.mov`: a short demo video for the opt-in smoke test
 - `tests/`: a synthetic, no-media regression fixture for SRT generation
 
 No trained model, API credential, cache, virtual environment, or third-party
-binary is included in this repository. Apart from `samples/PMQ.flv`, do not
+binary is included in this repository. Apart from `samples/sample.mov`, do not
 commit media to the repository.
 
 ## Requirements
@@ -115,7 +115,7 @@ FFmpeg and the `tiny` Whisper model, which may download that model on first
 use. It creates a five-second temporary copy of local media and removes all
 outputs after the check.
 
-`samples/PMQ.flv` is the included default input. It is used only when you
+`samples/sample.mov` is the included default input. It is used only when you
 explicitly run this test:
 
 ```bash
