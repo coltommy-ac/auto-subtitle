@@ -12,6 +12,10 @@ translate the generated subtitles through DeepL or Baidu Translate.
 > This is a learning/demo project, not a production-ready subtitle service.
 > Only process media you own or are authorized to process.
 
+## Documentation
+
+- [Detailed design (Chinese)](docs/design.md)
+
 ## What is included
 
 - `bin/autosub`: pipeline entry point

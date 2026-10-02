@@ -19,7 +19,6 @@ cache/
 # Legacy local material: not part of the maintained demo
 tools/
 auto-subtitle-ai-coding.pptx
-design-doc.md
 bin/*.bak
 bin/*.php
 bin/identify
