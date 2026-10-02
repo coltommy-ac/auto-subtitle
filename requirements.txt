@@ -1,0 +1,2 @@
+# Direct runtime dependency. Its CLI and JSON output are used by bin/stt_engine.
+mlx-whisper==0.4.3

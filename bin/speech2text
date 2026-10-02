@@ -1,5 +1,7 @@
 #!/bin/bash
 
+script_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+
 if [ $# -lt 2 ]
 then
         echo "Usage: $0 <cache dir> <original language:en, ja, es, ar, zh> <optional: start index>";
@@ -59,7 +61,7 @@ do
 		continue;
 	fi
 	echo "[$current/$total] making speech to text for clip_$line.flac...";
-	bin/stt_engine -s $audio_file -t $text_file -l $lang;
+	"$script_dir/stt_engine" -s "$audio_file" -t "$text_file" -l "$lang";
 	if [ $? -ne 0 ]
 	then
 		echo "an error occurred in invoking stt engine";
@@ -68,4 +70,3 @@ do
 done < "$index_file"
 
 exit 0;
-

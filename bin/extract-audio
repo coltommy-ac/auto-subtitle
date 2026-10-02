@@ -1,5 +1,7 @@
 #!/bin/bash
 
+script_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+
 if [ $# -lt 2 ]
 then
 	echo "Usage: $0 <media-filename> <destination folder> [limit-minutes]";
@@ -13,7 +15,7 @@ then
 fi
 
 meta_file="$2/meta";
-bin/extract-meta $1 $2;
+"$script_dir/extract-meta" "$1" "$2";
 if [ ! -f "$meta_file" ]
 then
 	echo "failed to extract meta from media file:$1";
@@ -116,4 +118,3 @@ fi
 
 echo "extract audio done in dir:$2";
 exit 0;
-

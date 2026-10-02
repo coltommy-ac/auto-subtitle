@@ -1,5 +1,8 @@
 #!/bin/bash
 
+script_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+project_root=$(dirname "$script_dir")
+
 # 解析参数，支持 --clean、--limit <分钟数>、--engine <deepl|baidu>（可在任意位置）
 clean=0
 limit=0
@@ -47,7 +50,7 @@ then
 	# 用视频文件名（去掉扩展名）作为缓存目录
 	base_name=$(basename "$video_file")
 	base_name="${base_name%.*}"
-	cache_dir="cache/$base_name"
+	cache_dir="$project_root/cache/$base_name"
 	# --clean：清除缓存，从头开始
 	if [ $clean -eq 1 ] && [ -d "$cache_dir" ]
 	then
@@ -55,7 +58,7 @@ then
 		rm -rf "$cache_dir"
 	fi
 	# 始终调用 extract-audio：由它自己判断是全新切片还是续切
-	bin/extract-audio "$video_file" "$cache_dir" "$limit"
+	"$script_dir/extract-audio" "$video_file" "$cache_dir" "$limit"
 	if [ $? -ne 0 ]
 	then
 		exit 1;
@@ -68,7 +71,7 @@ fi
 #do speech-to-text for the clips
 orig_lang=$2
 echo "making speech to text..."
-bin/speech2text "$cache_dir" "$orig_lang"
+"$script_dir/speech2text" "$cache_dir" "$orig_lang"
 if [ $? -ne 0 ]
 then
 	exit 2;
@@ -76,7 +79,7 @@ fi
 
 #merge the texts of all the clips to generate subtitle in oringal language
 echo "generating subtitle file in $orig_lang..."
-python3 bin/make-srt.py -d "$cache_dir" -l "$orig_lang"
+python3 "$script_dir/make-srt.py" -d "$cache_dir" -l "$orig_lang"
 if [ $? -ne 0 ]
 then
 	exit 3;
@@ -89,7 +92,7 @@ then
 	[ -f "$srt_file" ] && rm "$srt_file";
 	#translate subtitle to targeting language
 	echo "translating subtitle [$orig_lang -> $sub_lang]...";
-	python3 bin/translate.py -i "$cache_dir/output.$orig_lang.srt" -o "$srt_file" -s "$orig_lang" -t "$sub_lang" --engine "$engine";
+	python3 "$script_dir/translate.py" -i "$cache_dir/output.$orig_lang.srt" -o "$srt_file" -s "$orig_lang" -t "$sub_lang" --engine "$engine";
 #	echo "generating subtitle file in $sub_lang...";
 #	php bin/make-srt.php -d "$cache_dir" -l "$sub_lang";
 fi
@@ -110,4 +113,3 @@ then
 		echo "done! subtitle saved to: $srt_file"
 	fi
 fi
-

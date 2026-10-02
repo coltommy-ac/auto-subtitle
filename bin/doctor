@@ -1,0 +1,131 @@
+#!/bin/bash
+# Check local prerequisites without installing software, downloading models, or
+# printing credential values.
+
+set -u
+
+script_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+project_root=$(dirname "$script_dir")
+
+usage() {
+    cat <<'EOF'
+Usage: bin/doctor [--engine deepl|baidu]
+
+Checks the prerequisites for local transcription. With --engine, it also
+checks whether the selected optional translation provider is configured.
+EOF
+}
+
+engine=""
+case "${1:-}" in
+    "") ;;
+    --engine)
+        if [ "$#" -ne 2 ]; then
+            usage >&2
+            exit 2
+        fi
+        engine="${2:-}"
+        if [ "$engine" != "deepl" ] && [ "$engine" != "baidu" ]; then
+            usage >&2
+            exit 2
+        fi
+        ;;
+    -h|--help)
+        usage
+        exit 0
+        ;;
+    *)
+        usage >&2
+        exit 2
+        ;;
+esac
+
+failures=0
+
+pass() { printf '[ok] %s\n' "$1"; }
+fail() { printf '[missing] %s\n' "$1"; failures=$((failures + 1)); }
+note() { printf '[note] %s\n' "$1"; }
+
+if [ "$(uname -s)" = "Darwin" ]; then
+    pass "macOS detected"
+else
+    fail "macOS is required by the current MLX transcription adapter"
+fi
+
+if [ "$(uname -m)" = "arm64" ]; then
+    pass "Apple Silicon (arm64) detected"
+else
+    fail "Apple Silicon (arm64) is required by the current MLX transcription adapter"
+fi
+
+if command -v python3 >/dev/null 2>&1; then
+    if python3 -c 'import sys; raise SystemExit(sys.version_info < (3, 10))'; then
+        pass "python3 $(python3 -c 'import sys; print(".".join(map(str, sys.version_info[:3])))')"
+    else
+        fail "Python 3.10+ is required"
+    fi
+else
+    fail "python3 not found; install Python 3.10+"
+fi
+
+for command_name in ffmpeg ffprobe; do
+    if command -v "$command_name" >/dev/null 2>&1; then
+        pass "$command_name found"
+    else
+        fail "$command_name not found; run: brew install ffmpeg"
+    fi
+done
+
+if command -v mlx_whisper >/dev/null 2>&1; then
+    pass "mlx_whisper found"
+elif [ -x "$project_root/.venv/bin/mlx_whisper" ]; then
+    fail "mlx_whisper is installed in .venv but it is not activated; run: source .venv/bin/activate"
+else
+    fail "mlx_whisper not found; activate the project virtual environment, then run: python -m pip install mlx-whisper"
+fi
+
+model="${WHISPER_MODEL:-large}"
+case "$model" in
+    tiny|base|small|medium|large)
+        note "selected Whisper model: $model (it downloads on first transcription)"
+        ;;
+    *)
+        note "selected Whisper model: $model (passed through to mlx-whisper)"
+        ;;
+esac
+
+credential_present() {
+    key="$1"
+    if [ -n "${!key:-}" ]; then
+        return 0
+    fi
+    credential_file="$HOME/.autosub_credentials"
+    [ -f "$credential_file" ] && awk -F= -v key="$key" '$1 == key && length($2) > 0 { found=1 } END { exit !found }' "$credential_file"
+}
+
+case "$engine" in
+    deepl)
+        if credential_present DEEPL_APIKEY; then
+            pass "DeepL credential is configured"
+        else
+            fail "DeepL credential not configured; add DEEPL_APIKEY to ~/.autosub_credentials or the environment"
+        fi
+        ;;
+    baidu)
+        if credential_present BAIDU_APPID && credential_present BAIDU_APPKEY; then
+            pass "Baidu credentials are configured"
+        else
+            fail "Baidu credentials not configured; add BAIDU_APPID and BAIDU_APPKEY to ~/.autosub_credentials or the environment"
+        fi
+        ;;
+    "")
+        note "translation credentials not checked (use --engine deepl or --engine baidu)"
+        ;;
+esac
+
+if [ "$failures" -gt 0 ]; then
+    printf '\nDoctor found %s issue(s).\n' "$failures" >&2
+    exit 1
+fi
+
+printf '\nDoctor check passed.\n'
