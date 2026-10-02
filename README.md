@@ -1,5 +1,7 @@
 # auto-subtitle
 
+[中文](README.zh-CN.md) | English
+
 A small macOS / Apple Silicon demo that generates an SRT subtitle file from a local media file.
 
 The pipeline extracts mono audio with FFmpeg, transcribes it locally with
