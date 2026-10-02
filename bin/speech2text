@@ -1,0 +1,71 @@
+#!/bin/bash
+
+if [ $# -lt 2 ]
+then
+        echo "Usage: $0 <cache dir> <original language:en, ja, es, ar, zh> <optional: start index>";
+        exit 1;
+fi
+
+if [ $# -eq 3 ]
+then
+	index=$3;
+else
+	index="0";
+fi
+	
+cache_dir=$1
+if [ ! -d "$cache_dir" ]
+then
+	echo "dir not exist: $cache_dir";
+	exit 2;
+fi
+
+index_file="$cache_dir/index";
+if [ ! -f "$index_file" ]
+then
+	echo "file not exist: $index_file";
+	exit 2;
+fi
+
+lang=$2;
+
+# 统计总片段数，用于进度显示
+total=$(grep -c . "$index_file" 2>/dev/null || echo 0)
+current=0
+
+while read line
+do
+	if [ -z "$line" ]
+	then
+		continue;
+	fi
+	current=$((current + 1))
+	if [ $line -lt $index ]
+	then
+		echo "[$current/$total] skip index:$line";
+		continue;
+	fi
+	audio_file="$cache_dir/clip_$line.flac";
+	if [ ! -f "$audio_file" ]
+	then
+		echo "file not exist: $audio_file";
+	        exit 1;
+	fi
+	text_file="$cache_dir/clip_$line.$lang.txt";
+	# 断点续跑：txt 已存在则跳过，避免重复跑 Whisper
+	if [ -f "$text_file" ]
+	then
+		echo "[$current/$total] skip (already done): clip_$line";
+		continue;
+	fi
+	echo "[$current/$total] making speech to text for clip_$line.flac...";
+	bin/stt_engine -s $audio_file -t $text_file -l $lang;
+	if [ $? -ne 0 ]
+	then
+		echo "an error occurred in invoking stt engine";
+		exit 3;
+	fi
+done < "$index_file"
+
+exit 0;
+

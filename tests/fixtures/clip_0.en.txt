@@ -1,0 +1,12 @@
+{
+  "results": [
+    {
+      "alternatives": [
+        {
+          "transcript": "Hello world.",
+          "timestamps": [["<s>", 0.5, 0.5], ["<e>", 2.0, 2.0]]
+        }
+      ]
+    }
+  ]
+}

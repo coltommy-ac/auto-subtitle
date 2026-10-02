@@ -1,0 +1,24 @@
+# macOS and local environments
+.DS_Store
+.venv/
+__pycache__/
+*.py[cod]
+
+# User media, generated audio, transcripts, and subtitles
+samples/
+cache/
+*.srt
+!tests/fixtures/expected.en.srt
+
+# API credentials must remain outside the repository
+.autosub_credentials
+.env
+.env.*
+
+# Legacy local material: not part of the maintained demo
+tools/
+auto-subtitle-ai-coding.pptx
+design-doc.md
+bin/*.bak
+bin/*.php
+bin/identify

@@ -1,0 +1,124 @@
+#!/bin/bash
+
+# stt_engine: 语音识别引擎
+# 使用 mlx-whisper（Apple Silicon 原生，GPU/Neural Engine 加速）
+# 输出 JSON 格式与 make-srt.py 兼容
+#
+# 可选环境变量：
+#   WHISPER_MODEL=tiny|base|small|medium|large  (默认 large，mlx-whisper 推荐)
+
+if [ $# -lt 1 ]; then
+    echo "Usage: $0 -s <audio filepath> -t <text filepath> -l <language: en, ja, es, ar, zh>"
+    exit 1
+fi
+
+while getopts "s:t:l:" opt; do
+    case $opt in
+        s) audio_file=$OPTARG;;
+        t) text_file=$OPTARG;;
+        l) lang=$OPTARG;;
+        ?) echo "bad parameter!"; exit 1;;
+    esac
+done
+
+if [ ! -f "$audio_file" ]; then
+    echo "file not exist: $audio_file"
+    exit 2
+fi
+
+if [ -z "$lang" ]; then
+    echo "language not specified"
+    exit 1
+fi
+
+if [ -z "$text_file" ]; then
+    echo "output text file not specified"
+    exit 1
+fi
+
+# Whisper 模型（可通过环境变量覆盖，默认 large）
+WHISPER_MODEL=${WHISPER_MODEL:-large}
+
+# 临时输出目录和文件名
+tmp_dir=$(dirname "$text_file")
+base_name=$(basename "$audio_file" .flac)
+whisper_json="$tmp_dir/$base_name.json"
+
+echo "running mlx-whisper on $audio_file (model=$WHISPER_MODEL, lang=$lang)..."
+
+# 调用 mlx-whisper（Apple Silicon GPU/Neural Engine 加速）：
+#   --model         使用的模型大小
+#   --language      指定原始语言，避免自动检测误差
+#   --output-format json  输出 JSON（注意 mlx-whisper 用连字符）
+#   --output-dir    输出目录
+mlx_whisper "$audio_file" \
+    --model "mlx-community/whisper-${WHISPER_MODEL}-mlx" \
+    --language "$lang" \
+    --output-format json \
+    --output-dir "$tmp_dir" 2>&1
+
+if [ ! -f "$whisper_json" ]; then
+    echo "whisper failed: output not found at $whisper_json"
+    exit 3
+fi
+
+# 将 Whisper JSON 转换成 make-srt.php 期望的格式：
+# {
+#   "results": [
+#     { "alternatives": [{ "transcript": "...",
+#                          "timestamps": [["<s>", start, start],
+#                                         ["<e>", end,   end  ]] }] }
+#   ]
+# }
+# make-srt.php 读法：timestamps[0][1] = 开始时间，timestamps[-1][2] = 结束时间
+# 原子写入：先写临时文件，成功后 mv，失败则清除
+text_file_tmp="${text_file}.tmp"
+python3 - "$whisper_json" "$text_file_tmp" <<'PYEOF'
+import json, sys
+
+src_file, dst_file = sys.argv[1], sys.argv[2]
+
+with open(src_file, encoding="utf-8") as f:
+    whisper_data = json.load(f)
+
+results = []
+for seg in whisper_data.get("segments", []):
+    text  = seg.get("text", "").strip()
+    start = float(seg.get("start", 0.0))
+    end   = float(seg.get("end",   0.0))
+
+    if not text:
+        continue
+    if end <= start:
+        end = start + 0.1
+
+    timestamps = [
+        ["<s>", start, start],
+        ["<e>", end,   end  ]
+    ]
+
+    results.append({
+        "alternatives": [{
+            "transcript": text,
+            "timestamps":  timestamps
+        }]
+    })
+
+with open(dst_file, "w", encoding="utf-8") as f:
+    json.dump({"results": results}, f, ensure_ascii=False, indent=2)
+
+print(f"converted {len(results)} segments -> {dst_file}")
+PYEOF
+
+if [ $? -ne 0 ]; then
+    rm -f "$text_file_tmp" "$whisper_json"
+    echo "json conversion failed"
+    exit 4
+fi
+
+# 转换成功：原子替换，并清理 whisper 中间 json
+mv "$text_file_tmp" "$text_file"
+rm -f "$whisper_json"
+
+echo "done"
+exit 0

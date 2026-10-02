@@ -1,0 +1,113 @@
+#!/bin/bash
+
+# 解析参数，支持 --clean、--limit <分钟数>、--engine <deepl|baidu>（可在任意位置）
+clean=0
+limit=0
+engine="deepl"
+positional=()
+skip_next=""
+for arg in "$@"; do
+	if [ -n "$skip_next" ]; then
+		case "$skip_next" in
+			limit)  limit=$arg;;
+			engine) engine=$arg;;
+		esac
+		skip_next=""
+		continue
+	fi
+	case "$arg" in
+		--clean)  clean=1;;
+		--limit)  skip_next="limit";;
+		--engine) skip_next="engine";;
+		*) positional+=("$arg");;
+	esac
+done
+set -- "${positional[@]}"
+
+if [ $# -lt 2 ]
+then
+	echo "Usage: $0 <video-filename> <original lang> [subtitle lang:zh(default), en, ja, es, ar] [--clean] [--limit <minutes>] [--engine deepl|baidu]";
+	exit 0;
+elif [ $# -eq 2 ]
+then
+	sub_lang="zh";
+elif [ $# -ge 3 ]
+then
+	sub_lang=$3;
+fi
+
+video_file=$1;
+if [ -d "$video_file" ]
+then
+	# 输入为缓存目录：跳过音频切片，直接从已有缓存恢复
+	cache_dir=$1;
+	echo "using existing dir: $cache_dir";
+elif [ -f "$video_file" ]
+then
+	# 用视频文件名（去掉扩展名）作为缓存目录
+	base_name=$(basename "$video_file")
+	base_name="${base_name%.*}"
+	cache_dir="cache/$base_name"
+	# --clean：清除缓存，从头开始
+	if [ $clean -eq 1 ] && [ -d "$cache_dir" ]
+	then
+		echo "cleaning cache: $cache_dir"
+		rm -rf "$cache_dir"
+	fi
+	# 始终调用 extract-audio：由它自己判断是全新切片还是续切
+	bin/extract-audio "$video_file" "$cache_dir" "$limit"
+	if [ $? -ne 0 ]
+	then
+		exit 1;
+	fi
+else
+	echo "file/dir not exist: $video_file";
+	exit 1;
+fi
+
+#do speech-to-text for the clips
+orig_lang=$2
+echo "making speech to text..."
+bin/speech2text "$cache_dir" "$orig_lang"
+if [ $? -ne 0 ]
+then
+	exit 2;
+fi
+
+#merge the texts of all the clips to generate subtitle in oringal language
+echo "generating subtitle file in $orig_lang..."
+python3 bin/make-srt.py -d "$cache_dir" -l "$orig_lang"
+if [ $? -ne 0 ]
+then
+	exit 3;
+fi
+
+srt_file="$cache_dir/output.$sub_lang.srt";
+if [ "$orig_lang" != "$sub_lang" ]
+then
+	# 原文 SRT 每次都重新生成，因此译文也需要重新翻译
+	[ -f "$srt_file" ] && rm "$srt_file";
+	#translate subtitle to targeting language
+	echo "translating subtitle [$orig_lang -> $sub_lang]...";
+	python3 bin/translate.py -i "$cache_dir/output.$orig_lang.srt" -o "$srt_file" -s "$orig_lang" -t "$sub_lang" --engine "$engine";
+#	echo "generating subtitle file in $sub_lang...";
+#	php bin/make-srt.php -d "$cache_dir" -l "$sub_lang";
+fi
+
+if [ -f "$srt_file" ]
+then
+	# 将字幕复制到视频文件同目录，播放器可自动加载
+	# 仅当输入为视频文件时执行（输入为缓存目录时无法确定视频位置）
+	if [ -f "$video_file" ]
+	then
+		video_dir=$(dirname "$video_file")
+		video_base=$(basename "$video_file")
+		video_base="${video_base%.*}"
+		output_srt="$video_dir/$video_base.$sub_lang.srt"
+		cp "$srt_file" "$output_srt"
+		echo "done! subtitle saved to: $output_srt"
+	else
+		echo "done! subtitle saved to: $srt_file"
+	fi
+fi
+

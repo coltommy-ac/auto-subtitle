@@ -1,0 +1,95 @@
+#!/bin/bash
+
+# extract-meta: 提取视频/音频元数据，输出 key=value 格式
+# 改写版本：使用 ffprobe 替代 mplayer -identify
+# 输出字段保持与旧版兼容：ID_AUDIO_RATE, ID_AUDIO_BITRATE, ID_AUDIO_NCH,
+#                          ID_LENGTH, ID_VIDEO_WIDTH/HEIGHT/FPS/BITRATE
+
+if [ $# != 2 ]
+then
+        echo "Usage: $0 <media-filename> <destination folder>"
+        exit 1
+fi
+
+mkdir -p "$2"
+if [ ! -d "$2" ]
+then
+        echo "failed to create dir: $2"
+        exit 2
+fi
+
+input="$1"
+meta_file="$2/meta"
+
+if [ ! -f "$input" ]
+then
+        echo "file not exist: $input"
+        exit 3
+fi
+
+# 用 python3 调用 ffprobe + 解析 JSON + 输出 key=value
+# （macOS 默认带 python3；不使用 jq 以减少依赖）
+python3 - "$input" "$meta_file" <<'PYEOF'
+import json, sys, subprocess
+input_file, meta_file = sys.argv[1], sys.argv[2]
+try:
+    out = subprocess.check_output(
+        ["ffprobe", "-v", "error", "-print_format", "json",
+         "-show_format", "-show_streams", input_file],
+        stderr=subprocess.PIPE)
+except subprocess.CalledProcessError as e:
+    sys.stderr.write(f"ffprobe failed: {e.stderr.decode(errors='ignore')}\n")
+    sys.exit(4)
+data = json.loads(out)
+out = []
+
+# 整体时长
+fmt = data.get("format", {})
+duration = fmt.get("duration")
+if duration:
+    out.append(f"ID_LENGTH={int(float(duration))}")
+
+# 音视频流
+for s in data.get("streams", []):
+    t = s.get("codec_type")
+    if t == "audio":
+        out.append(f"ID_AUDIO_ID={s.get('index', 0)}")
+        out.append(f"ID_AUDIO_CODEC={s.get('codec_name', '')}")
+        if s.get("sample_rate"):
+            out.append(f"ID_AUDIO_RATE={s['sample_rate']}")
+        # ffprobe 用 bit_rate (bps)；如果流上没有就尝试 format
+        br = s.get("bit_rate") or fmt.get("bit_rate")
+        if br:
+            out.append(f"ID_AUDIO_BITRATE={br}")
+        if s.get("channels") is not None:
+            out.append(f"ID_AUDIO_NCH={s['channels']}")
+    elif t == "video":
+        out.append(f"ID_VIDEO_ID={s.get('index', 0)}")
+        out.append(f"ID_VIDEO_CODEC={s.get('codec_name', '')}")
+        if s.get("width"):
+            out.append(f"ID_VIDEO_WIDTH={s['width']}")
+        if s.get("height"):
+            out.append(f"ID_VIDEO_HEIGHT={s['height']}")
+        # 帧率：r_frame_rate 形如 "30/1"
+        rate = s.get("r_frame_rate", "")
+        if "/" in rate:
+            num, den = rate.split("/")
+            try:
+                if int(den) != 0:
+                    out.append(f"ID_VIDEO_FPS={float(num)/float(den):.2f}")
+            except ValueError:
+                pass
+        if s.get("bit_rate"):
+            out.append(f"ID_VIDEO_BITRATE={s['bit_rate']}")
+
+with open(meta_file, "w") as f:
+    f.write("\n".join(out) + "\n")
+PYEOF
+
+if [ ! -s "$meta_file" ]
+then
+        echo "failed to write meta file: $meta_file"
+        exit 5
+fi
+
+exit 0

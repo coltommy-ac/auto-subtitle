@@ -1,0 +1,119 @@
+#!/bin/bash
+
+if [ $# -lt 2 ]
+then
+	echo "Usage: $0 <media-filename> <destination folder> [limit-minutes]";
+	exit 1;
+fi
+mkdir -p $2;
+if [ ! -d "$2" ]
+then
+	echo "failed to create dir:$2";
+	exit 2;
+fi
+
+meta_file="$2/meta";
+bin/extract-meta $1 $2;
+if [ ! -f "$meta_file" ]
+then
+	echo "failed to extract meta from media file:$1";
+	exit 3;
+fi
+
+#sample rate in Hz
+srate=`cat $meta_file | awk -F"=" '{if($1 == "ID_AUDIO_RATE") print $2;}'`;
+#audio bitrate in bit
+abr=`cat $meta_file | awk -F"=" '{if($1 == "ID_AUDIO_BITRATE") print $2;}'`;
+#number of audio channels
+nch=`cat $meta_file | awk -F"=" '{if($1 == "ID_AUDIO_NCH") print int($2);}'`;
+#clip length in second
+length=`cat $meta_file | awk -F"=" '{if($1 == "ID_LENGTH") print int($2);}'`;
+
+if [ -z "$srate" ] || [ -z "$abr" ] || [ -z "$nch" ] || [ -z "$length" ]
+then
+	echo "data missing in meta file:$meta_file";
+	exit 4;
+fi
+
+#the stt engine has a minimum sample-rate requirement (16khz)
+if [ $srate -ne 16000 ]
+then
+	srate=16000;
+fi
+
+#128k bitrate FLAC is good enough
+abr=`expr $abr / 1000`;
+if [ $abr -le 1 ]
+then
+	echo "bad meta: audio-bitrate=$abr, using default setting";
+	abr=64;
+#	exit 5;
+fi
+if [ $abr -gt 96 ]
+then
+	abr=96;
+fi
+
+if [ $length -lt 1 ]
+then
+	echo "[fatal]bad meta: length=$length";
+	exit 6;
+fi
+# 若指定了 --limit <分钟数>，则截断到该时长
+limit_minutes=${3:-0}
+if [ "$limit_minutes" -gt 0 ] 2>/dev/null; then
+	limit_seconds=$((limit_minutes * 60))
+	if [ $limit_seconds -lt $length ]; then
+		length=$limit_seconds
+		echo "limit mode: processing only first ${limit_minutes} minute(s) (${length}s)."
+	fi
+fi
+
+echo "extract audio with srate=${srate}Hz, abr=${abr}kbps and length=${length}s.";
+
+step=30;
+
+# 续切：若 index 已存在，从最大已切偏移的下一片段开始；否则从 0 开始
+index_file="$2/index";
+if [ -f "$index_file" ] && [ -s "$index_file" ]
+then
+	last_ss=$(awk 'BEGIN{max=0} /^[0-9]+$/{if($1>max)max=$1} END{print max}' "$index_file")
+	ss=$((last_ss + step))
+	echo "resuming from offset ${ss}s (already cut up to ${last_ss}s)."
+else
+	ss=0;
+fi
+
+if [ $ss -ge $length ]
+then
+	echo "nothing new to cut (already covered up to ${ss}s, limit=${length}s)."
+else
+	while [ $ss -lt $length ]
+	do
+		audio_file=$2/clip_$ss.flac;
+		es=`expr $ss + $step`;
+		echo "generating audio clip:[$ss-$es]...";
+		audio_file_tmp="${audio_file}.tmp";
+		# 原子写入：先写临时文件，成功后 mv；失败则清除临时文件
+		ffmpeg -hide_banner -loglevel error -y \
+			-ss $ss -t $step -i "$1" \
+			-vn -ar $srate -ac 1 \
+			-af "loudnorm" \
+			-c:a flac -f flac \
+			"$audio_file_tmp";
+
+		if [ ! -f "$audio_file_tmp" ] || [ ! -s "$audio_file_tmp" ]
+		then
+			rm -f "$audio_file_tmp";
+			echo "extract audio clip:[$ss-$es] produced no data (likely end of stream)";
+			break;
+		fi
+		mv "$audio_file_tmp" "$audio_file";
+		echo "$ss" >> "$index_file";
+		ss=$es;
+	done
+fi
+
+echo "extract audio done in dir:$2";
+exit 0;
+
